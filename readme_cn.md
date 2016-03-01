@@ -32,3 +32,15 @@ publisher/subscriber 发布订阅通过主题"kas", producer/consumer直接的�
 
 publisher/subscriber发布订阅通过主题"kas"
 > go run run.go -worker=add -topic="kas" -broker="amqp://guest:guest@localhost:5672/"
+
+
+###Tasks：
+
+把你的任务写到 github.com/k4s/pika/tasks. <br/>
+
+通过restfulAPI下发任务执行命令：<br/>
+
+
+> curl -i -X POST http://127.0.0.1:7778/topic/kas -d "tasksdata"
+
+> curl -i -X POST http://127.0.0.1:7778/direct/me -d "tasksdata"
