@@ -1,0 +1,1 @@
+2016/03/01 13:19:41 F:/work/go/src/github.com/k4s/pika/log/log.go:21: me publish err , msg: [49] ,err: Exception (504) Reason: "channel/connection is not open"

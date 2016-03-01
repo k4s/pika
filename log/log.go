@@ -7,7 +7,7 @@ import (
 
 func init() {
 	var err error
-	logfile, err = os.OpenFile("pika.log", os.O_RDWR|os.O_CREATE, 0644)
+	logfile, err = os.OpenFile("log/pika.log", os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		log.Fatalln("fail to create pika.log file!")
 		os.Exit(-1)

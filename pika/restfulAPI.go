@@ -20,22 +20,32 @@ func topicAdd(w http.ResponseWriter, r *http.Request) {
 		log.Logger("no borker,you can use redis and rabbitmq")
 		return
 	} else {
-		redisClient := broker.NewPikaRedisClient(flBroker)
-		fmt.Println(topicName, string(data))
-		err := redisClient.Publish(topicName, string(data))
-		if err != nil {
-			fmt.Fprintf(w, "%s publish err , msg:%s,err:%s", topicName, data, err)
-			log.Logger(topicName, "publish err , msg:", data, ",err:", err)
-			return
+		client := broker.NewBrokerClient(flBroker)
+		switch client := client.(type) {
+		case *broker.PikaRedisClient:
+			err := client.Publish(topicName, string(data))
+			if err != nil {
+				fmt.Fprintf(w, "%s publish err , msg:%s,err:%s", topicName, data, err)
+				log.Logger(topicName, "publish err , msg:", data, ",err:", err)
+				return
+			}
+		case *broker.PikaRabbitMQClient:
+			err := client.Publish(topicName, string(data))
+			if err != nil {
+				fmt.Fprintf(w, "%s publish err , msg:%s,err:%s", topicName, data, err)
+				log.Logger(topicName, "publish err , msg:", data, ",err:", err)
+				return
+			}
 		}
+
 	}
 
 	fmt.Fprintf(w, "topic:%s publish succeed!", topicName)
 }
 
-func plantAdd(w http.ResponseWriter, r *http.Request) {
+func directAdd(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
-	plantName := params.Get(":plantname")
+	directName := params.Get(":directname")
 	data, _ := ioutil.ReadAll(r.Body)
 	//new the redis client
 	if flBroker == "" {
@@ -43,23 +53,34 @@ func plantAdd(w http.ResponseWriter, r *http.Request) {
 		log.Logger("no borker,you can use redis and rabbitmq")
 		return
 	} else {
-		redisClient := broker.NewPikaRedisClient(flBroker)
-		fmt.Println(plantName, string(data))
-		err := redisClient.LPush(plantName, string(data))
-		if err != nil {
-			fmt.Fprintf(w, "%s producer err , msg:%s,err:%s", plantName, data, err)
-			log.Logger(plantName, "publish err , msg:", data, ",err:", err)
-			return
+		client := broker.NewBrokerClient(flBroker)
+		switch client := client.(type) {
+		case *broker.PikaRedisClient:
+			err := client.LPush(directName, string(data))
+			if err != nil {
+				fmt.Fprintf(w, "%s producer err , msg:%s,err:%s", directName, data, err)
+				log.Logger(directName, "publish err , msg:", data, ",err:", err)
+				return
+			}
+		case *broker.PikaRabbitMQClient:
+			fmt.Println(directName, string(data))
+			err := client.Push(directName, string(data))
+			if err != nil {
+				fmt.Fprintf(w, "%s producer err , msg:%s,err:%s", directName, data, err)
+				log.Logger(directName, "publish err , msg:", data, ",err:", err)
+				return
+			}
 		}
+
 	}
 
-	fmt.Fprintf(w, "plant:%s producer values succeed!", plantName)
+	fmt.Fprintf(w, "direct:%s producer values succeed!", directName)
 }
 
 func WebRun() {
 	mux := httprouter.New()
 	mux.Post("/topic(topic)/:topicname", topicAdd)
-	mux.Post("/plant(plant)/:plantname", plantAdd)
+	mux.Post("/direct(direct)/:directname", directAdd)
 
 	//  http.Handle("/", mux)
 

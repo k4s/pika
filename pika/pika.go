@@ -1,6 +1,7 @@
 package pika
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -9,9 +10,14 @@ import (
 )
 
 func PikaRun() {
-	topicRun()
-	plantRun()
-
+	if flTopic != "" {
+		fmt.Println("Topic worker start....")
+		topicRun()
+	}
+	if flDirect != "" {
+		fmt.Println("Direct worker start....")
+		directRun()
+	}
 }
 
 //receive worker from flag
@@ -26,55 +32,104 @@ func topiclist() []string {
 	return topiclist
 }
 
-//receive producer/consumer's plant from flag
-func plantlist() []string {
-	plantlist := strings.Split(flPlant, ",")
-	return plantlist
+//receive producer/consumer's direct from flag
+func directlist() []string {
+	directlist := strings.Split(flDirect, ",")
+	return directlist
 }
 
 //running the publisher/subscriber's worker
 func topicRun() {
 
 	for _, topic := range topiclist() {
-		redisClient := broker.NewPikaRedisClient(flBroker)
-		pubsub, err := redisClient.Subscribe(topic)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		go func() {
-			defer pubsub.Close()
-			for {
-				msg, err := pubsub.ReceiveMessage()
-				if err != nil {
-					panic(err)
-				}
-
-				//fmt.Println(msg.Channel, msg.Payload)
-				for _, worker := range workerlist() {
-					tasks.TaskMap[worker](msg.Payload)
-
-				}
+		client := broker.NewBrokerClient(flBroker)
+		switch client := client.(type) {
+		case *broker.PikaRedisClient:
+			//			redisClient := broker.NewPikaRedisClient(flBroker)
+			pubsub, err := client.Subscribe(topic)
+			if err != nil {
+				fmt.Println(err)
+				return
 			}
-		}()
+			go func() {
+				defer pubsub.Close()
+				for {
+					msg, err := pubsub.ReceiveMessage()
+					if err != nil {
+						panic(err)
+					}
+
+					//fmt.Println(msg.Channel, msg.Payload)
+					for _, worker := range workerlist() {
+						if worker == "" {
+							continue
+						}
+						tasks.TaskMap[worker](msg.Payload)
+
+					}
+				}
+			}()
+		case *broker.PikaRabbitMQClient:
+			pubsub, err := client.Subscribe(topic)
+			if err != nil {
+				return
+			}
+			go func() {
+				for {
+					for m := range pubsub {
+						s := bytes.NewBuffer(m.Body)
+						for _, worker := range workerlist() {
+							if worker == "" {
+								continue
+							}
+							tasks.TaskMap[worker](s.String())
+
+						}
+					}
+				}
+			}()
+
+		}
 
 	}
 }
 
 //running the producer/consumer's worker
-func plantRun() {
-	for _, plant := range plantlist() {
-		redisClient := broker.NewPikaRedisClient(flBroker)
-		go func() {
-			for {
-				msg, err := redisClient.RPop(plant)
-				if err != nil {
-					continue
+func directRun() {
+	for _, direct := range directlist() {
+		client := broker.NewBrokerClient(flBroker)
+		switch client := client.(type) {
+		case *broker.PikaRedisClient:
+			go func() {
+				for {
+					msg, err := client.RPop(direct)
+					if err != nil {
+						continue
+					}
+					for _, worker := range workerlist() {
+						if worker == "" {
+							continue
+						}
+						tasks.TaskMap[worker](msg)
+					}
 				}
-				for _, worker := range workerlist() {
-					tasks.TaskMap[worker](msg)
+			}()
+		case *broker.PikaRabbitMQClient:
+			go func() {
+				for {
+					msg, err := client.Pop(direct)
+					if err != nil {
+						continue
+					}
+					for _, worker := range workerlist() {
+						if worker == "" {
+							continue
+						}
+						tasks.TaskMap[worker](msg)
+					}
 				}
-			}
-		}()
+			}()
+		}
+
 	}
 }
